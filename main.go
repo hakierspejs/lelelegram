@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"code.hackerspace.pl/hscloud/go/mirko"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/golang/glog"
 
@@ -101,11 +100,6 @@ func main() {
 		groupId = g
 	}
 
-	m := mirko.New()
-	if err := m.Listen(); err != nil {
-		glog.Exitf("Listen(): %v", err)
-	}
-
 	mgr := irc.NewManager(flagIRCMaxConnections, flagIRCServer, flagIRCChannel)
 
 	s, err := newServer(groupId, mgr)
@@ -113,11 +107,7 @@ func main() {
 		glog.Exitf("newServer(): %v", err)
 	}
 
-	if err := m.Serve(); err != nil {
-		glog.Exitf("Serve(): %v", err)
-	}
-
-	ctx := m.Context()
+	ctx := context.Background()
 
 	// Start IRC manager
 	go mgr.Run(ctx)
@@ -129,9 +119,7 @@ func main() {
 	mgr.Subscribe(s.ircLog)
 
 	// Start message processing bridge (connecting telLog and ircLog)
-	go s.bridge(ctx)
-
-	<-m.Done()
+	s.bridge(ctx)
 }
 
 // bridge connects telLog with ircLog, exchanging messages both ways and
