@@ -1,4 +1,9 @@
 FROM golang:1.14-alpine
-ADD ./lelelegram lelelegram
-RUN cd lelelegram && go build .
-ENTRYPOINT ./lelelegram/lelelegram
+RUN mkdir lelegram
+ADD go.sum lelegram
+ADD telegram.go lelegram
+ADD main.go lelegram
+ADD irc lelegram/irc
+ADD go.mod lelegram
+RUN cd lelegram; go build
+ENTRYPOINT lelegram/lelelegram
