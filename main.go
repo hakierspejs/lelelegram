@@ -26,6 +26,8 @@ var (
 	flagIRCServer         string
 	flagIRCChannel        string
 	flagIRCLogin          string
+    flagNickPrefix        string
+    flagNickSuffix         string
 )
 
 // server is responsible for briding IRC and Telegram.
@@ -39,6 +41,12 @@ type server struct {
 	telLog chan *telegramPlain
 	// backlog from IRC
 	ircLog chan *irc.Notification
+}
+
+type ircFlags struct {
+	prefix 		string
+	suffix 		string
+	defaultNick string
 }
 
 // telegramPlain is a plaintext telegram message - ie. one that's ready to send
@@ -76,6 +84,8 @@ func main() {
 	flag.StringVar(&flagIRCServer, "irc_server", "chat.freenode.net:6667", "The address (with port) of the IRC server to connect to")
 	flag.StringVar(&flagIRCChannel, "irc_channel", "", "The channel name (including hash(es)) to bridge")
 	flag.StringVar(&flagIRCLogin, "irc_login", "lelegram[t]", "The login of irc user used by bot")
+    flag.StringVar(&flagNickPrefix, "nick_prefix", "", "Prefix for nicks used on irc channel")
+    flag.StringVar(&flagNickSuffix, "nick_suffix", "[t]", "Sufix for nicks used on irc channel")
 	flag.Parse()
 
 	if flagTelegramToken == "" {
@@ -89,6 +99,11 @@ func main() {
 		flagIRCLogin = "lelegram"
 	}
 	glog.Infof("dabug: Backup login in IRC: %s", flagIRCLogin)
+    if (flagNickSuffix == "" && flagNickPrefix == "") {
+        glog.Warning("No prefix nor suffix for nicks has been choosen. Default nick will have [t] suffix")
+        flagNickSuffix = "[t]"
+    }
+
 	// Parse given group ID.
 	// If not set, start server in 'lame' mode, ie. one that will not actually
 	// perform any bridging, but will let you figure out the IDs of groups that
@@ -105,8 +120,9 @@ func main() {
 		groupId = g
 	}
 
+
 	// https://tools.ietf.org/html/rfc2812#section-1.3 "Channel names are case insensitive"
-	mgr := irc.NewManager(flagIRCMaxConnections, flagIRCServer, strings.ToLower(flagIRCChannel), flagIRCLogin)
+	mgr := irc.NewManager(flagIRCMaxConnections, flagIRCServer, strings.ToLower(flagIRCChannel), flagIRCLogin, flagNickPrefix, flagNickSuffix)
 	glog.V(4).Infof("telegram/debug4: Linking to group: %d", groupId)
 	s, err := newServer(groupId, mgr)
 	if err != nil {

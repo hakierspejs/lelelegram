@@ -34,7 +34,6 @@ type Manager struct {
 	ctrl chan *control
 	// event channel (from connections)
 	event chan *event
-
 	// map from user name to IRC connection
 	conns map[string]*ircconn
 	// map from user name to IRC nick
@@ -45,14 +44,20 @@ type Manager struct {
 	subscribers map[chan *Notification]bool
 	// context representing the Manager lifecycle
 	runctx context.Context
+	// irc nick prefix
+	prefix string
+	// irc nick suffix
+	suffix string
 }
 
-func NewManager(max int, server, channel string, login string) *Manager {
+func NewManager(max int, server, channel string, login string, prefix string, suffix string) *Manager {
 	return &Manager{
 		max:     max,
 		login:	 login,
 		server:  server,
 		channel: channel,
+		prefix:	 prefix,
+		suffix:	 suffix,
 		ctrl:    make(chan *control),
 		event:   make(chan *event),
 	}

@@ -74,22 +74,28 @@ type IRCMessage struct {
 	text string
 }
 
-func NewConn(server, channel, userTelegram string, backup bool, h func(e *event)) (*ircconn, error) {
+func NewConn(server, channel, userTelegram string, backup bool, nickPrefix string, nickSuffix string,
+				h func(e *event)) (*ircconn, error) {
 	// Generate IRC nick from username.
-	nick := reIRCNick.ReplaceAllString(userTelegram, "")
+	// RFC standard - 9. Freenode allows 16 chars for nickname
+	const maxIRCNick = 16
+    nick := reIRCNick.ReplaceAllString(userTelegram, "")
 	username := nick
+    var nickLen = maxIRCNick - len(nickPrefix) - len(nickSuffix)
 	if len(username) > 9 {
 		username = username[:9]
 	}
 	nick = strings.ToLower(nick)
-	if len(nick) > 13 {
-		nick = nick[:13]
+	if len(nick) > nickLen {
+		nick = nick[:nickLen]
 	}
 	if len(nick) == 0 {
 		glog.Errorf("Could not create IRC nick for %q", userTelegram)
 		nick = "wtf"
 	}
-	nick += "[t]"
+	// Add prefix and suffix at the end
+	nick = nickPrefix + nick + nickSuffix
+
 	glog.Infof("Connecting to IRC/%s/%s/%s as %s from %s...", server, channel, userTelegram, nick, username)
 	conn, err := net.Dial("tcp", server)
 	if err != nil {

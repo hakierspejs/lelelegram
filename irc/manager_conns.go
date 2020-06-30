@@ -52,7 +52,7 @@ func (m *Manager) getconn(ctx context.Context, userTelegram string) (*ircconn, e
 // newconn creates a new IRC connection as a given user, and saves it to the
 // conns map.
 func (m *Manager) newconn(ctx context.Context, userTelegram string, backup bool) (*ircconn, error) {
-	c, err := NewConn(m.server, m.channel, userTelegram, backup, m.Event)
+	c, err := NewConn(m.server, m.channel, userTelegram, backup, m.prefix, m.suffix, m.Event)
 	if err != nil {
 		return nil, err
 	}
