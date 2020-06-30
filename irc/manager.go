@@ -24,6 +24,8 @@ import (
 type Manager struct {
 	// maximum IRC sessions to maintain
 	max int
+	// IRC bot's username
+	login string
 	// IRC server address
 	server string
 	// IRC channel name
@@ -45,9 +47,10 @@ type Manager struct {
 	runctx context.Context
 }
 
-func NewManager(max int, server, channel string) *Manager {
+func NewManager(max int, server, channel string, login string) *Manager {
 	return &Manager{
 		max:     max,
+		login:	 login,
 		server:  server,
 		channel: channel,
 		ctrl:    make(chan *control),
@@ -142,7 +145,7 @@ func (m *Manager) ensureReceiver(ctx context.Context) {
 		if len(m.conns) == 0 {
 			// Noone said anything on telegram, make backup
 			glog.Infof("No receiver found, making backup")
-			name := "lelegram"
+			name := m.login
 			c, err := m.newconn(ctx, name, true)
 			if err != nil {
 				glog.Errorf("Could not make backup receiver: %v", err)

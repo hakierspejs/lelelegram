@@ -21,29 +21,31 @@ func (s *server) telegramConnection(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("GetUpdatesChan(%+v): %v", u, err)
 	}
+	glog.V(8).Infof("telegram/debug8: New update")
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case u, ok := <-updates:
+		case update, ok := <-updates:
 			if !ok {
 				return fmt.Errorf("Updates channel closed")
 			}
 
 			// Dispatch update.
 			switch {
-			case u.Message != nil:
-				if u.Message.Chat.ID != s.groupId {
-					glog.Infof("[ignored group %d] <%s> %v", u.Message.Chat.ID, u.Message.From, u.Message.Text)
+			case update.Message != nil:
+				glog.V(4).Infof("telegram/debug4: New message: %d", update.Message.Chat.ID)
+				if update.Message.Chat.ID != s.groupId {
+					glog.Infof("[ignored group %d] <%s> %v", update.Message.Chat.ID, update.Message.From, update.Message.Text)
 					continue
 				}
-				date := time.Unix(int64(u.Message.Date), 0)
+				date := time.Unix(int64(update.Message.Date), 0)
 				if time.Since(date) > 2*time.Minute {
-					glog.Infof("[old message] <%s> %v", u.Message.From, u.Message.Text)
+					glog.Infof("[old message] <%s> %v", update.Message.From, update.Message.Text)
 					continue
 				}
-				if msg := plainFromTelegram(s.tel.Self.ID, &u); msg != nil {
+				if msg := plainFromTelegram(s.tel.Self.ID, &update); msg != nil {
 					s.telLog <- msg
 				}
 			}
@@ -54,6 +56,7 @@ func (s *server) telegramConnection(ctx context.Context) error {
 // telegramLoop maintains a telegramConnection.
 func (s *server) telegramLoop(ctx context.Context) {
 	for {
+		glog.V(4).Info("telegram/debug4: Starting telegram connection loop")
 		err := s.telegramConnection(ctx)
 		if err == ctx.Err() {
 			glog.Infof("Telegram connection closing: %v", err)

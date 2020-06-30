@@ -25,6 +25,7 @@ var (
 	flagIRCMaxConnections int
 	flagIRCServer         string
 	flagIRCChannel        string
+	flagIRCLogin          string
 )
 
 // server is responsible for briding IRC and Telegram.
@@ -74,6 +75,7 @@ func main() {
 	flag.IntVar(&flagIRCMaxConnections, "irc_max_connections", 10, "How many simulataneous connections can there be to IRC before they get recycled")
 	flag.StringVar(&flagIRCServer, "irc_server", "chat.freenode.net:6667", "The address (with port) of the IRC server to connect to")
 	flag.StringVar(&flagIRCChannel, "irc_channel", "", "The channel name (including hash(es)) to bridge")
+	flag.StringVar(&flagIRCLogin, "irc_login", "lelegram[t]", "The login of irc user used by bot")
 	flag.Parse()
 
 	if flagTelegramToken == "" {
@@ -83,7 +85,10 @@ func main() {
 	if flagIRCChannel == "" {
 		glog.Exitf("irc_channel must be set")
 	}
-
+	if flagIRCLogin == "" {
+		flagIRCLogin = "lelegram"
+	}
+	glog.Infof("dabug: Backup login in IRC: %s", flagIRCLogin)
 	// Parse given group ID.
 	// If not set, start server in 'lame' mode, ie. one that will not actually
 	// perform any bridging, but will let you figure out the IDs of groups that
@@ -100,8 +105,9 @@ func main() {
 		groupId = g
 	}
 
-	mgr := irc.NewManager(flagIRCMaxConnections, flagIRCServer, flagIRCChannel)
-
+	// https://tools.ietf.org/html/rfc2812#section-1.3 "Channel names are case insensitive"
+	mgr := irc.NewManager(flagIRCMaxConnections, flagIRCServer, strings.ToLower(flagIRCChannel), flagIRCLogin)
+	glog.V(4).Infof("telegram/debug4: Linking to group: %d", groupId)
 	s, err := newServer(groupId, mgr)
 	if err != nil {
 		glog.Exitf("newServer(): %v", err)
@@ -127,17 +133,17 @@ func main() {
 func (s *server) bridge(ctx context.Context) {
 	nickmap := make(map[string]string)
 	for {
+		glog.V(32).Info("bridge/debug32: New element in queue")
 		select {
 		case <-ctx.Done():
 			return
-
 		case m := <-s.telLog:
 			// Event from Telegram (message). Translate Telegram names into IRC names.
 			text := m.text
 			for t, i := range nickmap {
 				text = strings.ReplaceAll(text, "@"+t, i)
 			}
-			glog.Infof("telegram/%s: %v", m.user, text)
+			glog.Infof("telegram/info/%s: %v", m.user, text)
 
 			// Attempt to route message to IRC twice.
 			// This blocks until success or failure, making sure the log stays
@@ -153,6 +159,7 @@ func (s *server) bridge(ctx context.Context) {
 			cancel()
 
 		case n := <-s.ircLog:
+			glog.V(4).Infof("bridge/irc/debug4: Get message from irc: %s", n.Message)
 			// Notification from IRC (message or new nickmap)
 			switch {
 			case n.Nickmap != nil:

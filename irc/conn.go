@@ -53,7 +53,7 @@ type ircconn struct {
 	connected int64
 }
 
-var reIRCNick = regexp.MustCompile(`[^A-Za-z0-09]`)
+var reIRCNick = regexp.MustCompile(`[^A-Za-z0-9]`)
 
 // Say is called by the Manager when a message should be sent out by the
 // connection.
@@ -74,8 +74,23 @@ type IRCMessage struct {
 	text string
 }
 
-func NewConn(server, channel, user string, backup bool, h func(e *event)) (*ircconn, error) {
-	glog.Infof("Connecting to IRC/%s/%s/%s...", server, channel, user)
+func NewConn(server, channel, userTelegram string, backup bool, h func(e *event)) (*ircconn, error) {
+	// Generate IRC nick from username.
+	nick := reIRCNick.ReplaceAllString(userTelegram, "")
+	username := nick
+	if len(username) > 9 {
+		username = username[:9]
+	}
+	nick = strings.ToLower(nick)
+	if len(nick) > 13 {
+		nick = nick[:13]
+	}
+	if len(nick) == 0 {
+		glog.Errorf("Could not create IRC nick for %q", userTelegram)
+		nick = "wtf"
+	}
+	nick += "[t]"
+	glog.Infof("Connecting to IRC/%s/%s/%s as %s from %s...", server, channel, userTelegram, nick, username)
 	conn, err := net.Dial("tcp", server)
 	if err != nil {
 		return nil, fmt.Errorf("Dial(_, %q): %v", server, err)
@@ -84,7 +99,7 @@ func NewConn(server, channel, user string, backup bool, h func(e *event)) (*ircc
 	i := &ircconn{
 		server:  server,
 		channel: channel,
-		user:    user,
+		user:    userTelegram,
 
 		eventHandler: h,
 
@@ -102,22 +117,14 @@ func NewConn(server, channel, user string, backup bool, h func(e *event)) (*ircc
 		connected: int64(0),
 	}
 
-	// Generate IRC nick from username.
-	nick := reIRCNick.ReplaceAllString(user, "")
-	if len(nick) > 13 {
-		nick = nick[:13]
-	}
-	if len(nick) == 0 {
-		glog.Errorf("Could not create IRC nick for %q", user)
-		nick = "wtf"
-	}
-	nick += "[t]"
+
+
 
 	// Configure IRC client to populate the IRC Queue.
 	config := irc.ClientConfig{
 		Nick: nick,
-		User: user,
-		Name: user,
+		User: username,
+		Name: userTelegram,
 		Handler: irc.HandlerFunc(func(c *irc.Client, m *irc.Message) {
 			i.iq <- m
 		}),
@@ -221,6 +228,9 @@ func (i *ircconn) loop(ctx context.Context) {
 				glog.V(1).Infof("IRC/%s/debug: %+v", i.user, m)
 			}
 
+			glog.V(16).Infof("irc/debug16: Message: cmd(%s), channel(%s)", m.Command, m.Params[0])
+			glog.V(16).Infof("irc/debug16: Current: channel(%s), command(%s)", i.channel, "PRIVMSG")
+			glog.V(16).Infof("irc/debug16: Current: channel-eq(%t), command-eq(%t)", i.channel == m.Params[0], "PRIVMSG" == m.Command)
 			switch {
 			case m.Command == "001":
 				glog.Infof("IRC/%s/info: joining %s...", i.user, i.channel)
@@ -250,8 +260,8 @@ func (i *ircconn) loop(ctx context.Context) {
 				glog.Infof("IRC/%s/info: got kicked", i.user)
 				die(nil)
 				return
-
-			case m.Command == "PRIVMSG" && m.Params[0] == i.channel:
+			case m.Command == "PRIVMSG" && strings.ToLower(m.Params[0]) == i.channel:
+				glog.V(8).Infof("IRC/%s/debug8: received message on %s", i.user, i.channel)
 				go i.eventHandler(&event{
 					message: &eventMessage{i, m.Prefix.Name, m.Params[1]},
 				})

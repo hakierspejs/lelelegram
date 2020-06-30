@@ -77,8 +77,10 @@ func (m *Manager) notifyAll(n *Notification) {
 
 // doevent handles incoming events.
 func (m *Manager) doevent(ctx context.Context, e *event) {
+	glog.V(16).Infof("event/debug16: New event handling")
 	switch {
 	case e.nick != nil:
+		glog.V(8).Infof("event/debug8: nick (%s)", e.nick.nick)
 		// Nick update from connection
 
 		// Ensure this connection is still used.
