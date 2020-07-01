@@ -75,13 +75,13 @@ type IRCMessage struct {
 }
 
 func NewConn(server, channel, userTelegram string, backup bool, nickPrefix string, nickSuffix string,
-				h func(e *event)) (*ircconn, error) {
+	h func(e *event)) (*ircconn, error) {
 	// Generate IRC nick from username.
 	// RFC standard - 9. Freenode allows 16 chars for nickname
 	const maxIRCNick = 16
-    nick := reIRCNick.ReplaceAllString(userTelegram, "")
+	nick := reIRCNick.ReplaceAllString(userTelegram, "")
 	username := nick
-    var nickLen = maxIRCNick - len(nickPrefix) - len(nickSuffix)
+	var nickLen = maxIRCNick - len(nickPrefix) - len(nickSuffix)
 	if len(username) > 9 {
 		username = username[:9]
 	}
@@ -122,9 +122,6 @@ func NewConn(server, channel, userTelegram string, backup bool, nickPrefix strin
 
 		connected: int64(0),
 	}
-
-
-
 
 	// Configure IRC client to populate the IRC Queue.
 	config := irc.ClientConfig{

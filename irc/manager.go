@@ -53,11 +53,11 @@ type Manager struct {
 func NewManager(max int, server, channel string, login string, prefix string, suffix string) *Manager {
 	return &Manager{
 		max:     max,
-		login:	 login,
+		login:   login,
 		server:  server,
 		channel: channel,
-		prefix:	 prefix,
-		suffix:	 suffix,
+		prefix:  prefix,
+		suffix:  suffix,
 		ctrl:    make(chan *control),
 		event:   make(chan *event),
 	}
