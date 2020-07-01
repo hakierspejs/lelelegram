@@ -14,13 +14,13 @@ var (
 
 // getconn either gets a connection by username, or creates a new one (after
 // evicting the least recently used connection).
-func (m *Manager) getconn(ctx context.Context, user string) (*ircconn, error) {
+func (m *Manager) getconn(ctx context.Context, userTelegram string) (*ircconn, error) {
 	// Is the user shitlisted?
-	if t, ok := m.shitlist[user]; ok && time.Now().Before(t) {
+	if t, ok := m.shitlist[userTelegram]; ok && time.Now().Before(t) {
 		return nil, errBanned
 	}
 	// Do we already have a connection?
-	c, ok := m.conns[user]
+	c, ok := m.conns[userTelegram]
 	if ok {
 		// Bump and return.
 		c.last = time.Now()
@@ -46,17 +46,17 @@ func (m *Manager) getconn(ctx context.Context, user string) (*ircconn, error) {
 	}
 
 	// Allocate new connection
-	return m.newconn(ctx, user, false)
+	return m.newconn(ctx, userTelegram, false)
 }
 
 // newconn creates a new IRC connection as a given user, and saves it to the
 // conns map.
-func (m *Manager) newconn(ctx context.Context, user string, backup bool) (*ircconn, error) {
-	c, err := NewConn(m.server, m.channel, user, backup, m.Event)
+func (m *Manager) newconn(ctx context.Context, userTelegram string, backup bool) (*ircconn, error) {
+	c, err := NewConn(m.server, m.channel, userTelegram, backup, m.prefix, m.suffix, m.Event)
 	if err != nil {
 		return nil, err
 	}
-	m.conns[user] = c
+	m.conns[userTelegram] = c
 
 	go c.Run(m.runctx)
 
