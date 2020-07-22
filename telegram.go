@@ -128,10 +128,11 @@ func plainFromTelegram(selfID int, u *tgbotapi.Update) *telegramPlain {
 		if u.Message.Sticker.Emoji != "" {
 			emoji += "/" + u.Message.Sticker.Emoji
 		}
-		parts = append(parts, fmt.Sprintf("<sticker%s>", emoji))
+		parts = append(parts, fmt.Sprintf("<sticker %s>", emoji))
 	}
 
 	// Mutually exclusive stuff.
+
 	switch {
 	case u.Message.Animation != nil:
 		// This message contains an animation.
@@ -164,7 +165,9 @@ func plainFromTelegram(selfID int, u *tgbotapi.Update) *telegramPlain {
 	if text != "" {
 		parts = append(parts, text)
 	}
-
+	if len(u.Message.Caption) > 0 {
+		parts = append(parts, fmt.Sprintf("<caption: %s>", u.Message.Caption))
+	}
 	// Was there anything that we extracted?
 	if len(parts) > 0 {
 		return &telegramPlain{from.String(), strings.Join(parts, " ")}
