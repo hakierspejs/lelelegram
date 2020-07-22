@@ -10,6 +10,13 @@ import (
 	"github.com/golang/glog"
 )
 
+func mergeStringSplices(stringSplice1 []string, stringSplice2 []string) []string {
+	resultSplice := make([]string, len(stringSplice1)+len(stringSplice2))
+	copy(resultSplice, stringSplice1)
+	copy(resultSplice[len(stringSplice1):], stringSplice2)
+	return resultSplice
+}
+
 // telegramConnection runs a long-lived connection to the Telegram API to receive
 // updates and pipe resulting messages into telLog.
 func (s *server) telegramConnection(ctx context.Context) error {
@@ -73,6 +80,56 @@ func (s *server) telegramLoop(ctx context.Context) {
 	}
 }
 
+func extractStickerToIRCText(m *tgbotapi.Message, parts []string) []string {
+	// This message contains a sticker.
+	if m.Sticker != nil {
+		emoji := ""
+		if m.Sticker.SetName != "" {
+			emoji += "/" + m.Sticker.SetName
+		}
+		if m.Sticker.Emoji != "" {
+			emoji += "/" + m.Sticker.Emoji
+		}
+		parts = append(parts, fmt.Sprintf("<sticker%s>", emoji))
+	}
+	return parts
+}
+
+func extractMediaFromMessage(m *tgbotapi.Message) []string {
+	parts := []string{}
+	switch {
+	case m.Animation != nil:
+		// This message contains an animation.
+		a := m.Animation
+		parts = append(parts, fmt.Sprintf("<uploaded animation: %s >\n", fileURL(a.FileID, "mp4")))
+
+	case m.Document != nil:
+		// This message contains a document.
+		d := m.Document
+		fnp := strings.Split(d.FileName, ".")
+		ext := "bin"
+		if len(fnp) > 1 {
+			ext = fnp[len(fnp)-1]
+		}
+		parts = append(parts, fmt.Sprintf("<uploaded file: %s >\n", fileURL(d.FileID, ext)))
+
+	case m.Photo != nil:
+		// This message contains a photo.
+		// Multiple entries are for different file sizes, choose the highest quality one.
+		hq := (*m.Photo)[0]
+		for _, p := range *m.Photo {
+			if p.FileSize > hq.FileSize {
+				hq = p
+			}
+		}
+		parts = append(parts, fmt.Sprintf("<uploaded photo: %s >\n", fileURL(hq.FileID, "jpg")))
+	}
+	if len(m.Caption) > 0 {
+		parts = append(parts, fmt.Sprintf("<caption: %s>\n", m.Caption))
+	}
+	return parts
+}
+
 // plainFromTelegram turns a Telegram message into a plain text message.
 func plainFromTelegram(selfID int, u *tgbotapi.Update) *telegramPlain {
 	parts := []string{}
@@ -107,66 +164,50 @@ func plainFromTelegram(selfID int, u *tgbotapi.Update) *telegramPlain {
 			}
 		} else {
 			// Someone replied to a native telegram message.
-			quoted := strings.TrimSpace(replyto.Text)
-			quotedLine = strings.TrimSpace(strings.Split(quoted, "\n")[0])
+			switch {
+			case replyto.Text != "":
+				quoted := strings.TrimSpace(replyto.Text)
+				quotedLine = strings.TrimSpace(strings.Split(quoted, "\n")[0])
+				if quotedLine != "" {
+					quotedLine = quotedLine + "\n"
+				}
+			case replyto.ReplyToMessage != nil:
+				nestedReply := replyto.ReplyToMessage
+				quoted := strings.TrimSpace(nestedReply.Text)
+				quotedLine = strings.TrimSpace(strings.Split(quoted, "\n")[0])
+				if quotedLine != "" {
+					quotedLine = quotedLine + "\n"
+				}
+			case replyto.Document != nil || replyto.Animation != nil || replyto.Photo != nil:
+				quotedLine = extractMediaFromMessage(replyto)[0]
+			case replyto.Sticker != nil:
+				quotedLine = extractStickerToIRCText(replyto, []string{})[0]
+			}
 		}
-
 		// If we have a line, quote it. Otherwise just refer to the nick without a quote.
 		if quotedLine != "" {
-			parts = append(parts, fmt.Sprintf("%s: >%s\n", ruid, quotedLine))
+			// Truncate quoted message
+			if len(quotedLine) > 120 {
+				quotedLine = quotedLine[:115] + "... "
+			}
+			parts = append(parts, fmt.Sprintf("%s: >%s", ruid, quotedLine))
 		} else {
 			parts = append(parts, fmt.Sprintf("%s: ", ruid))
 		}
 	}
 
-	// This message contains a sticker.
-	if u.Message.Sticker != nil {
-		emoji := ""
-		if u.Message.Sticker.SetName != "" {
-			emoji += "/" + u.Message.Sticker.SetName
-		}
-		if u.Message.Sticker.Emoji != "" {
-			emoji += "/" + u.Message.Sticker.Emoji
-		}
-		parts = append(parts, fmt.Sprintf("<sticker %s>", emoji))
-	}
-
-	// Mutually exclusive stuff.
-
-	switch {
-	case u.Message.Animation != nil:
-		// This message contains an animation.
-		a := u.Message.Animation
-		parts = append(parts, fmt.Sprintf("<uploaded animation: %s >\n", fileURL(a.FileID, "mp4")))
-
-	case u.Message.Document != nil:
-		// This message contains a document.
-		d := u.Message.Document
-		fnp := strings.Split(d.FileName, ".")
-		ext := "bin"
-		if len(fnp) > 1 {
-			ext = fnp[len(fnp)-1]
-		}
-		parts = append(parts, fmt.Sprintf("<uploaded file: %s >\n", fileURL(d.FileID, ext)))
-
-	case u.Message.Photo != nil:
-		// This message contains a photo.
-		// Multiple entries are for different file sizes, choose the highest quality one.
-		hq := (*u.Message.Photo)[0]
-		for _, p := range *u.Message.Photo {
-			if p.FileSize > hq.FileSize {
-				hq = p
-			}
-		}
-		parts = append(parts, fmt.Sprintf("<uploaded photo: %s >\n", fileURL(hq.FileID, "jpg")))
-	}
-
+	parts = extractStickerToIRCText(u.Message, parts)
+	parts = mergeStringSplices(parts, extractMediaFromMessage(u.Message))
 	// This message has some plain text.
 	if text != "" {
+		// Messages were truncated about length of 460. This length (412) is similar to what can be seen in irssi
+		for len(text) > 412 {
+			glog.V(16).Infof("telegram/debug16: Long message - %d", len(text))
+			separatorIndex := strings.LastIndex(text[:412], " ")
+			parts = append(parts, text[:separatorIndex]+"\n")
+			text = text[separatorIndex+1:]
+		}
 		parts = append(parts, text)
-	}
-	if len(u.Message.Caption) > 0 {
-		parts = append(parts, fmt.Sprintf("<caption: %s>", u.Message.Caption))
 	}
 	// Was there anything that we extracted?
 	if len(parts) > 0 {
