@@ -6,4 +6,4 @@ ADD main.go lelegram
 ADD irc lelegram/irc
 ADD go.mod lelegram
 RUN cd lelegram; go build
-ENTRYPOINT lelegram/lelelegram
+ENTRYPOINT ["/go/lelegram/lelelegram"]
