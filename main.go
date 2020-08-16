@@ -158,7 +158,7 @@ func (s *server) bridge(ctx context.Context) {
 			// This blocks until success or failure, making sure the log stays
 			// totally ordered in the face of some of our IRC connections being
 			// dead/slow.
-			ctxT, cancel := context.WithTimeout(ctx, 15*time.Second)
+			ctxT, cancel := context.WithTimeout(ctx, 31*time.Second)
 			err := s.mgr.SendMessage(ctxT, m.user, text)
 			if err != nil {
 				glog.Warningf("Attempting redelivery of %v after error: %v...", m, err)

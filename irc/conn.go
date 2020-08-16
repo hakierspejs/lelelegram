@@ -212,7 +212,7 @@ func (i *ircconn) loop(ctx context.Context) {
 	}
 
 	// Timeout ticker - give up connecting to IRC after 15 seconds.
-	t := time.NewTicker(time.Second * 15)
+	t := time.NewTicker(time.Second * 30)
 
 	previousNick := ""
 
