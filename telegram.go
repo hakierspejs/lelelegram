@@ -204,6 +204,9 @@ func plainFromTelegram(selfID int, u *tgbotapi.Update) *telegramPlain {
 		for len(text) > 412 {
 			glog.V(16).Infof("telegram/debug16: Long message - %d", len(text))
 			separatorIndex := strings.LastIndex(text[:412], " ")
+			if separatorIndex == -1 {
+				separatorIndex = 410
+			}
 			parts = append(parts, text[:separatorIndex]+"\n")
 			text = text[separatorIndex+1:]
 		}
