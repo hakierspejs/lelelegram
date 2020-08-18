@@ -47,6 +47,9 @@ type ircconn struct {
 	// eq is the Evict Queue, used by the manager to signal that a connection
 	// should die.
 	eq chan struct{}
+	// ds is the Dead Signal, a channel closed by the connection when it will
+	// not service any more requests through sq.
+	ds chan struct{}
 
 	// connected is a flag (via sync/atomic) that is used to signal to the
 	// manager that this connection is up and healthy.
@@ -58,7 +61,17 @@ var reIRCNick = regexp.MustCompile(`[^A-Za-z0-9]`)
 // Say is called by the Manager when a message should be sent out by the
 // connection.
 func (i *ircconn) Say(msg *controlMessage) {
-	i.sq <- msg
+	select {
+	case i.sq <- msg:
+		// message got routed - nothing to do.
+	case <-i.ds:
+		go func() {
+			msg.done <- nil
+		}()
+		// message dropped.
+		// TODO(q3k): return error to caller instead of silently dropping.
+		glog.Errorf("Message dropped due to aborted connection: %v", msg)
+	}
 }
 
 // Evict is called by the Manager when a connection should die.
@@ -119,6 +132,7 @@ func NewConn(server, channel, userTelegram string, backup bool, nickPrefix strin
 		iq: make(chan *irc.Message),
 		sq: make(chan *controlMessage),
 		eq: make(chan struct{}),
+		ds: make(chan struct{}),
 
 		connected: int64(0),
 	}
@@ -176,6 +190,7 @@ func (i *ircconn) loop(ctx context.Context) {
 
 	die := func(err error) {
 		// drain queue of say messages...
+		close(i.ds)
 		for _, s := range sayqueue {
 			glog.Infof("IRC/%s/say: [drop] %q", i.user, s.message)
 			s.done <- err
