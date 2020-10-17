@@ -158,7 +158,7 @@ func (s *server) bridge(ctx context.Context) {
 			// This blocks until success or failure, making sure the log stays
 			// totally ordered in the face of some of our IRC connections being
 			// dead/slow.
-			ctxT, cancel := context.WithTimeout(ctx, 15*time.Second)
+			ctxT, cancel := context.WithTimeout(ctx, 31*time.Second)
 			err := s.mgr.SendMessage(ctxT, m.user, text)
 			if err != nil {
 				glog.Warningf("Attempting redelivery of %v after error: %v...", m, err)
@@ -185,8 +185,22 @@ func (s *server) bridge(ctx context.Context) {
 					text = strings.ReplaceAll(text, i, "@"+t)
 				}
 				// And send message to Telegram.
-				msg := tgbotapi.NewMessage(s.groupId, fmt.Sprintf("<%s> %s", n.Message.Nick, text))
-				s.tel.Send(msg)
+				// Try to send Markdown message first
+				msg := tgbotapi.NewMessage(s.groupId, fmt.Sprintf("*<%s>* %s", n.Message.Nick, text))
+				msg.ParseMode = "Markdown"
+				glog.V(16).Infof("bridge/debug16: Sending message %s", msg.Text)
+				m, err := s.tel.Send(msg)
+				glog.V(8).Infof("bridge/debug8: Telegram send returns %d:%s", m.MessageID, m.Text)
+				if err != nil {
+					glog.Warningf("bridge: Cannot send message to telegram: %s", err)
+					// Try again as plaintext - cannot differ parsing problem from other now
+					msg = tgbotapi.NewMessage(s.groupId, fmt.Sprintf("<%s> %s", n.Message.Nick, text))
+					m, err = s.tel.Send(msg)
+					glog.V(8).Infof("bridge/debug8: Returned %d:%s", m.MessageID, m.Text)
+					if err != nil {
+						glog.Errorf("bridge: E: Cannot send message to telegram: %s", err)
+					}
+				}
 			}
 		}
 	}
